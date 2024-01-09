@@ -1,6 +1,6 @@
 package com.roughandcheap.tinyclosuretabledao.jpatree;
 
-import java.io.Serializable;
+import com.roughandcheap.tinyclosuretabledao.commons.entity.BasicEntity;
 
 /**
  * Responsibilities of entities that are managed by a TreeDao.
@@ -10,12 +10,7 @@ import java.io.Serializable;
  * @author Fritz Ritzberger, 19.10.2012
  * @author Zatsurendo, 2023-11-15
  */
-public interface TreeNode {
-    
-    /**
-	 * @return the primary key of this tree node.
-	 */
-    Serializable getId();
+public interface TreeNode extends BasicEntity {
 
     /**
 	 * For copy and unique constraint-checks cloning is required.

@@ -5,12 +5,15 @@ import com.roughandcheap.tinyclosuretabledao.jpatree.AbstractTreeDao;
 import com.roughandcheap.tinyclosuretabledao.jpatree.ClosureTableTreeNodeInfo;
 import com.roughandcheap.tinyclosuretabledao.jpatree.JpaTreeException;
 
+import jakarta.persistence.Query;
+
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -23,25 +26,29 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreePath<N>> extends AbstractTreeDao<N, P>{
-    
+/**
+ * @author zaturendo
+ */
+public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreePath<N>> extends AbstractTreeDao<N, P> {
+
     private static final Logger log = LoggerFactory.getLogger(ClosureTableTreeDao.class);
-    /** {@code ClosureTableTreeNode} のサブクラス */
+    /** sub class of {@code ClosureTableTreeNode} */
     protected final Class<N> treeNodeEntityClass;
-    /** {@code TreePath} のサブクラス */
+    /** sub class of {@code TreePath} */
     protected final Class<P> treePathEntityClass;
     /** */
     private boolean removeReferencedNodes = false;
-    
+
     /**
-     * コンストラクタ
-     * @param treeNodeEntityClass {@code ClosureTableTreeNode} のサブクラス
-     * @param treePathEntityClass {@code TreePath} のサブクラス
-     * @param dbSession {@code DbSession} の実装クラス
+     * Constructor
+     * <p>
+     * @param treeNodeEntityClass the persistence class representing the tree, implementing ClosureTableTreeNode. Its simpleName will be used as table name for queries.
+     * @param treePathEntityClass the persistence class representing ancestor-child relations, implementing TreePaths. Its simpleName will be used as table name for queries.
+     * @param dbSession           {@code DbSession} の実装クラス
      */
     public ClosureTableTreeDao(
-            Class<N> treeNodeEntityClass, 
-            Class<P> treePathEntityClass, 
+            Class<N> treeNodeEntityClass,
+            Class<P> treePathEntityClass,
             DbSession dbSession) {
         super(treeNodeEntityClass.getSimpleName(), treePathEntityClass.getSimpleName(), dbSession);
         this.treeNodeEntityClass = treeNodeEntityClass;
@@ -61,8 +68,10 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
      * <p>
      * {@code removeReferencedNodes} が TRUE の場合に削除します。
      * <p>
-     * {@code removeReferencedNodes} に TRUE をセットするか、{@link com.ranc.demotree.common.jpatree.ClosureTableTreeDao#removeNode(ClosureTableTreeNode, boolean)}
+     * {@code removeReferencedNodes} に TRUE
+     * をセットするか、{@link com.ranc.demotree.common.jpatree.ClosureTableTreeDao#removeNode(ClosureTableTreeNode, boolean)}
      * を使用してください。
+     * 
      * @param nodeToRemove node to remove
      */
     public void removeNode(N nodeToRemove) {
@@ -97,7 +106,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     /** {@inheritDoc} */
     @Override
     public boolean isRoot(N entity) {
-        
+
         if (!isPersistent(entity) || !isPathExists(entity)) {
             return false;
         }
@@ -107,7 +116,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     /** {@inheritDoc} */
     @Override
     public boolean hasChild(N parent) {
-        
+
         if (!isPersistent(parent) || !isPathExists(parent)) {
             throw new JpaTreeException("parent must be persist.");
         }
@@ -118,17 +127,31 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
         return 1 < getTreePaths(parent).size();
     }
 
-    
     /**
      * {@code node} のパスが存在するかを返す
-     * <p>{@code TreePath.descendant == node} に等しいレコードを検索して、1件以上のレコードが存在するか
+     * <p>
+     * {@code TreePath.descendant == node} に等しいレコードを検索して、1件以上のレコードが存在するか
      * どうかを確認する。
+     * 
      * @param node
      * @return
      */
+    @Override
     public boolean isPathExists(N node) {
 
         return 0 < getDescendantPaths(node).size();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean parentContains(N parent, N descendant) {
+        return getTree(parent).stream().filter(p -> p.equals(descendant)).findFirst().isPresent();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean childBelongsTo(N child, N parent) {
+        return getPath(child).stream().filter(p -> p.equals(parent)).findFirst().isPresent();
     }
 
     /** {@inheritDoc} */
@@ -143,11 +166,11 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     /** {@inheritDoc} */
     @Override
     public N update(N entity) {
-        
-		if (isPersistent(entity)) {
+
+        if (isPersistent(entity)) {
             return treeNodeEntityClass.cast(save(entity));
         }
-		throw new JpaTreeException("Specified entity is not exist");
+        throw new JpaTreeException("Specified entity is not exist");
     }
 
     /** {@inheritDoc} */
@@ -160,28 +183,64 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     /** {@inheritDoc} */
     @Override
     public N find(Serializable id) {
-       
+
         return treeNodeEntityClass.cast(session.get(treeNodeEntityClass, id));
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<N> findByNodeName(String nodeName) {
+
+        String sqlString = "select n from " + nodeEntityName() + " n where nodeName = ?1";
+        return (List<N>) session.queryList(sqlString, Arrays.asList(nodeName).toArray());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<N> findByNodeNameStartingWith(String startingWith) {
+
+        startingWith = startingWith + '%';
+        String sqlString = "select n from " + nodeEntityName() + " n where n.nodeName like ?1";
+        return (List<N>) session.queryList(sqlString, Arrays.asList(startingWith).toArray());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<N> findByNodeNameContains(String contains) {
+
+        contains = '%' + contains + '%';
+        String sqlString = "select n from " + nodeEntityName() + " n where n.nodeName like ?1";
+        return (List<N>) session.queryList(sqlString, Arrays.asList(contains).toArray());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<N> findByNodeNameEndsWith(String endsWith) {
+
+        endsWith = '%' + endsWith;
+        String sqlString = "select n from " + nodeEntityName() + " n where n.nodeName like ?1";
+        return (List<N>) session.queryList(sqlString, Arrays.asList(endsWith).toArray());
     }
 
     /** {@inheritDoc} */
     @Override
     public N createRoot(N entity) {
-        
+
         return addChild(null, entity);
     }
 
     /**
      * {@code parent} ノードの子要素として {@code child} ノードを追加する
+     * 
      * @param parent N extends TreeNode
-     * @param child N extends TreeNode
+     * @param child  N extends TreeNode
      * @return N extends TreeNode
      * @throws JpaTreeException child が Null の場合
      * @throws JpaTreeException パスが未登録の場合
      */
     @Override
     public N addChild(N parent, N child) {
-        
+
         return addChild(parent, child, 0);
     }
 
@@ -216,7 +275,8 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
 
     /**
      * {@code parentPaths}の各要素のdescendantを{@code child}にした上でDBを更新する
-     * @param child ClosureTableTreeNode
+     * 
+     * @param child       ClosureTableTreeNode
      * @param parentPaths TreePath のコレクション
      */
     private void clonePaths(N child, List<P> parentPaths) {
@@ -232,7 +292,8 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
 
     /**
      * {@code node} の自己参照パスをDBに保存する
-     * @param node ClosureTableTreeNode
+     * 
+     * @param node  ClosureTableTreeNode
      * @param depth int
      */
     private void insertSelfReference(N node, int depth, int orderIndex) {
@@ -248,13 +309,14 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
 
     /**
      * {@code treePathEntityClass} の新しいインスタンスを返します
+     * 
      * @return TreePath
      */
     public P newTreePathInstance() {
 
         try {
             Constructor<?> constructor = treePathEntityClass.getConstructor();
-            return treePathEntityClass.cast(constructor.newInstance()) ;
+            return treePathEntityClass.cast(constructor.newInstance());
         } catch (NoSuchMethodException | InstantiationException | IllegalAccessException | IllegalArgumentException
                 | InvocationTargetException e) {
             throw new JpaTreeException(e.getMessage(), e.getCause());
@@ -264,7 +326,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     /** {@inheritDoc} */
     @Override
     public long getChildrenCount(N parent) {
-        
+
         return getChildren(parent).size();
     }
 
@@ -387,7 +449,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     /** {@inheritDoc} */
     @Override
     public void moveTo(N parent, N moveTo) {
-        
+
         if (parent == null || !isPersistent(parent) || !isPathExists(parent)) {
             // 移動元ノードがNullあるいは永続化されていない場合例外をスロー
             throw new JpaTreeException("parent should be persist.");
@@ -472,7 +534,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     /** {@inheritDoc} */
     @Override
     public void deletePath(N descendant) {
-        
+
         if (hasChild(descendant)) {
             throw new JpaTreeException("specified node has child(ren)");
         }
@@ -484,7 +546,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     /** {@inheritDoc} */
     @Override
     public P findTreePath(P treePath) {
-        
+
         return findTreePath(treePath.getAncestor(), treePath.getDescendant());
     }
 
@@ -492,12 +554,12 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     @Override
     @SuppressWarnings("unchecked")
     public P findTreePath(N ancestor, N descendant) {
-        
+
         String queryString = "select p from " + pathEntityName() + " p "
-            + "where p.ancestor = ?1 "
-            + "and   p.descendant = ?2";
-        Object[] params = {ancestor, descendant};
-        
+                + "where p.ancestor = ?1 "
+                + "and   p.descendant = ?2";
+        Object[] params = { ancestor, descendant };
+
         List<P> paths = (List<P>) session.queryList(queryString, params);
         if (paths == null || paths.isEmpty()) {
             return null;
@@ -508,38 +570,104 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     /** {@inheritDoc} */
     @Override
     public long countPaths(N node) {
-        
+
         List<P> paths = getDescendantPaths(node);
-		return paths != null ? paths.size() : 0;
+        return paths != null ? paths.size() : 0;
+    }
+
+    public List<ClosureTableTreeNodeInfo> getClosureTableTreeNodeInfo(int level) {
+
+        if (level < 1) {
+            throw new IllegalArgumentException("level should be lager than 0");
+        }
+        return getClosureTableTreeNodeInfo().stream().filter(info -> info.getDepth() >= level)
+                .collect(Collectors.toList());
     }
 
     /**
+     * ノード情報のコレクションを返す
+     * <p>
+     * TreeNode はデータのみで、ツリーに関する情報は持っていません。各 TreeNode の関連性をいち早く知るには、
+     * 関連性を保持する TreePath と組み合わせて、ツリー状にするのが最適です。
+     * <p>
+     * このメソッドは、TreeNode を基準に、TreePath のツリー情報を保持した {@code ClosureTableTreeNodeIno} の
+     * コレクションを返します。
+     * <p>
+     * この{@code ClosureTableTreeNodeIno} は、次のような構造になっています。
+     * <ul>
+     * <li>ClosureTableTreeNode</li>
+     * <li>treePaths（ルートノードからのパスを文字列で表現したもの）</li>
+     * <li>pathSeq（ルートノードからパスを、ノードIDをカンマ区切りで表現したもの）</li>
+     * <li>depth（ルートからの深さ）</lid>
+     * <li>orderIndex（並び順）</lid>
+     * </ul>
      * 
      * @return
      */
     public List<ClosureTableTreeNodeInfo> getClosureTableTreeNodeInfo() {
 
-        String queryString = "select "
-                + "p_1.descendant, "
-                + "listagg( substr( concat( '000000', str( p_1.ancestor ) ),"
-                + "length( concat( '000000', str( p_1.ancestor ) ) ) - 5 ), '-' ) within  group ( order by p_1.depth desc ), "
-                + "count(p_1) depth "
+        String queryString = "select p_1.descendant, "
+                + "listagg( substr( concat( '000000', str( p_1.ancestor ) ), length( concat( '000000', str( p_1.ancestor ) ) ) - 5 ), '-' ) within  group ( order by p_1.depth desc ), "
+                + "listagg( str(p_1.ancestor), ',' ) within  group ( order by p_1.depth desc ), "
+                + "count(p_1) depth, "
+                + "max(p_1.orderIndex) orderIndex "
                 + "from " + pathEntityName() + " p_1 "
                 + "group by p_1.descendant";
-        
-        System.out.println(queryString);
+        return getTransFomrmed(session.getEntityManager().createQuery(queryString));
+    }
+
+    /**
+     * 複数のノードのツリーを取得し、そのツリーの一覧からノードインフォを返す
+     * <p>
+     * 基本的な機能は {@code getClosureTableTreeNodeInfo()} と同じですが、ツリーを作成するレベルを変更できるようにします。
+     * <p>
+     * 引数で渡したコレクションの各ノードをルートとする一覧を作成し返します。
+     * <p>
+     * これは、メニューリストのようなツリー構造のものを、ユーザーのロールによって返したいリストを変更したいような時に最適です。
+     * @param havingNodes List<N>
+     * @return
+     */
+    public List<ClosureTableTreeNodeInfo> getClosureTableTreeNodeInfo(List<N> havingNodes) {
+
+        if (havingNodes == null || havingNodes.isEmpty()) {
+            return null;
+        }
+        List<N> treeNodes = havingNodes.stream().map(this::getTree).flatMap(Collection::stream)
+                .collect(Collectors.toList());
+        String queryString = "select p_1.descendant, "
+                + "listagg( substr( concat( '000000', str( p_1.ancestor ) ), length( concat( '000000', str( p_1.ancestor ) ) ) - 5 ), '-' ) within  group ( order by p_1.depth desc ), "
+                + "listagg( str(p_1.ancestor), ',' ) within  group ( order by p_1.depth desc ), "
+                + "count(p_1) depth, "
+                + "max(p_1.orderIndex) orderIndex "
+                + "from " + pathEntityName() + " p_1 "
+                + "where p_1.descendant in(?1) "
+                + "group by p_1.descendant";
+        List<ClosureTableTreeNodeInfo> resultList = getTransFomrmed(
+                session.getEntityManager().createQuery(queryString).setParameter(1, treeNodes));
+        long d = resultList.get(0).getDepth() - 1L;
+        return resultList.stream().map(n -> {
+            n.setDepth(n.getDepth() - d);
+            return n;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * 
+     * @param query
+     * @return
+     */
+    private List<ClosureTableTreeNodeInfo> getTransFomrmed(Query query) {
 
         @SuppressWarnings("unchecked")
-        List<ClosureTableTreeNodeInfo> pathDepths = (List<ClosureTableTreeNodeInfo>) session.getEntityManager()
-                .createQuery(queryString)
-                .unwrap(org.hibernate.query.Query.class)
+        List<ClosureTableTreeNodeInfo> pathDepths = query.unwrap(org.hibernate.query.Query.class)
                 .setTupleTransformer((tuple, aliases) -> {
                     return new ClosureTableTreeNodeInfo(
                             (ClosureTableTreeNode) tuple[0],
                             (String) tuple[1],
-                            (long) tuple[2]);
+                            (String) tuple[2],
+                            (long) tuple[3],
+                            (int) tuple[4]);
                 }).getResultList();
-
         return pathDepths.stream().sorted(Comparator.comparing(ClosureTableTreeNodeInfo::getTreePaths))
                 .collect(Collectors.toList());
     }
@@ -557,6 +685,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
         String queryString = "select p from " + pathEntityName() + " p";
         return (List<P>) session.queryList(queryString, null);
     }
+
     public void printNodeInfo(List<ClosureTableTreeNodeInfo> nodeInfo) {
 
         String top = "+- id -+- node_name ---------------------------------+- path -------------------------------------------------+ depth +";
@@ -564,9 +693,9 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
         log.debug(top);
         nodeInfo.forEach(n -> {
             String line = "| " + format(n.getDescendant().getId(), 4) + " | "
-            + format(tabSpace((int) n.getDepth()) + "- " + n.getDescendant().getNodeName(), 43) + " | "
-            + format(n.getTreePaths(), 54) + " | "
-            + format(n.getDepth(), 5) + " |";
+                    + format(tabSpace((int) n.getDepth()) + "- " + n.getDescendant().getNodeName(), 43) + " | "
+                    + format(n.getTreePaths(), 54) + " | "
+                    + format(n.getDepth(), 5) + " |";
             log.debug(line);
         });
         log.debug(bot);
@@ -594,7 +723,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
             log.debug(line);
         });
         log.debug(bot);
-    } 
+    }
 
     private String format(Serializable target, int length) {
 
@@ -606,19 +735,20 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
             return format(target.toString(), length);
         }
     }
-    
+
     private String format(String target, int length) {
-        int byteDiff = (getByLength(target, Charset.forName("UTF-8")) - target.length())/2;
+        int byteDiff = (getByLength(target, Charset.forName("UTF-8")) - target.length()) / 2;
         return String.format("%-" + (length - byteDiff) + "s", target);
     }
 
     private String format(Number target, int length) {
         String str = String.valueOf(target);
-        int byteDiff = (getByLength(str, Charset.forName("UTF-8")) - str.length())/2;
+        int byteDiff = (getByLength(str, Charset.forName("UTF-8")) - str.length()) / 2;
         return String.format("%" + (length - byteDiff) + "d", target);
     }
 
     private int getByLength(String string, Charset charset) {
         return string.getBytes(charset).length;
     }
+
 }

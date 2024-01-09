@@ -3,18 +3,21 @@ package com.roughandcheap.tinyclosuretabledao.commons;
 import java.io.Serializable;
 import java.util.List;
 
-import org.springframework.stereotype.Component;
-
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
 import jakarta.transaction.Transactional;
 
-@Component
 public class DbSessionJpaImpl implements DbSession {
     
-    @PersistenceContext
-    private EntityManager entityManager;
+    protected EntityManager entityManager;
+
+    public DbSessionJpaImpl() {
+        //
+    }
+
+    public DbSessionJpaImpl(EntityManager entityManager) {
+        this.entityManager = entityManager;
+    }
 
     /** {@inheritDoc} */
     @Override
