@@ -23,7 +23,7 @@ public abstract class AbstractClosureTableTreeNode<N extends AbstractClosureTabl
         implements ClosureTableTreeNode {
 
     /** Node name */
-    @Column(nullable = false, length = 100)
+    @Column(name = "node_name", nullable = false, length = 100)
     protected String nodeName;
 
     /**

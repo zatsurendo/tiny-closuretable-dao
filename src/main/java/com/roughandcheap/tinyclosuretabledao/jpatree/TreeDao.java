@@ -29,215 +29,221 @@ import com.roughandcheap.tinyclosuretabledao.jpatree.closuretable.TreePath;
 public interface TreeDao<N extends TreeNode, P extends TreePath<N>> {
     
     /**
-     * Returns whether the specified {@code entity} is persistent or not.
+     * 指定された {@code entity} が永続化されているかどうかを返す
      * @param entity  &lt; N extends TreeNode &gt;
-     * @return true:persistent, false:not persistent
+     * @return true:永続化されている, false:永続化されたいない
      */
     boolean isPersistent(N entity);
 
     /**
-     * Returns whether the specified {@code entity} is the root or not.
-     * <p>Determine if {@code entity} is the root if both {@code ancestor} and {@code descendant} of the path are the same and {@code depth} is 0.
-     * @param entity &lt; N extends TreeNode &gt;
-     * @return true:is root, false:is not root.
+     * 指定された {@code entity} がルートであるかどうかを返す
+     * <p>{@code entity} がルートであるかどうかは、パスの祖先{@code ancestor}
+     * と{@code descendant} が共に同じで、{@code depth}が 0 であるかどうか。
+     * @param entity N extends TreeNode
+     * @return true:ルート要素, false:ルート要素ではない
      */
     boolean isRoot(N entity);
 
     /**
-     * Returns whether the given {@code parent} has any children
-     * @param parent &lt; N extends TreeNode &gt;
-     * @return true:has child(ren), false:has no child
+     * 指定された {@code parent} が子要素を持っているかどうかを返す
+     * @param parent N extends TreeNode
+     * @return true:もっている, false:もっていない
      */
     boolean hasChild(N parent);
 
     /**
-     * Returns whether or not the specified {@code node} path exists.
-     * @param node &lt; N extends TreeNode &gt;
-     * @return true:exists, false: not exists.
+     * 指定されたノードのパスが存在するかどうかを返す
+     * @param node
+     * @return true:存在する, false: 存在しない
      */
     boolean isPathExists(N node);
 
     /**
-     * Returns whether {@code descendant} exists for {@code parent}.
+     * parent に descendant が存在するかどうかを返す
      * <p>
-     * It means that {@code descendant} belongs to {@code parent}.
-     * @param parent &lt; N extends TreeNode &gt;
-     * @param descendant &lt; N extends TreeNode &gt;
-     * @return true:exists, false:not exists
+     * descendant が parent に属しているのかどうかを返します。
+     * @param parent
+     * @param descendant
+     * @return true:属している, false:属していない
      */
     boolean parentContains(N parent, N descendant);
 
     /**
-     * Returns whether {@code child} belongs to {@code ancestor
+     * child が ancestor に属しているかを返す
      * 
-     * @param child &lt; N extends TreeNode &gt;
-     * @param ancestor &lt; N extends TreeNode &gt;
-     * @return true:belongs, false:not belongs
+     * @param child
+     * @param ancestor
+     * @return
      */
     boolean childBelongsTo(N child, N ancestor);
 
     /**
-     * insert {@code entity}
-     * @param entity &lt; N extends TreeNode &gt;
-     * @return &lt; N extends TreeNode &gt;
+     * {@code entity}を挿入する
+     * @param entity N extends TreeNode
+     * @retur N extends TreeNode
      */
     N insert(N entity);
 
     /**
-     * update {@code entity}
-     * @param entity &lt; N extends TreeNode &gt;
-     * @return &lt; N extends TreeNode &gt;
+     * {@code entity}を更新する
+     * @param entity N extends TreeNode
+     * @return N extends TreeNode
      */
     N update(N entity);
 
     /**
-     * insert or update{@code entity}
-     * @param entity &lt; N extends TreeNode &gt;
-     * @return &lt; N extends TreeNode &gt;
+     * {@code entity} を挿入、あるいは更新する
+     * @param entity N extends TreeNode
+     * @return N extends TreeNode
      */
     N insertOrUpdate(N entity);
 
     /**
-     * Return element N with {@code id}.
+     * {@code id} を持つ要素 N を返す
      * @param id ID
-     * @return &lt; N extends TreeNode &gt;
+     * @return N extends TreeNode
      */
     N find(Serializable id);
 
     /**
-     * Return a collection of nodes matching {@code nodeName}. 
-     * @param nodeName String
-     * @return &lt; N extends TreeNode &gt;
+     * 
+     * @param nodeName
+     * @return
      */
     List<N> findByNodeName(String nodeName);
 
     /**
-     * Return a collection of nodes starting with {@code startingWith}. 
-     * @param startingWith String
-     * @return &lt; N extends TreeNode &gt;
+     * 
+     * @param startingWith
+     * @return
      */
     List<N> findByNodeNameStartingWith(String startingWith);
 
     /**
-     * Return a collection of nodes containing {@code contains}.
-     * @param contains String
-     * @return &lt; N extends TreeNode &gt;
+     * 
+     * @param contains
+     * @return
      */
     List<N> findByNodeNameContains(String contains);
 
     /**
-     * Return a collection of nodes ending with {@code endsWith}. 
-     * @param endsWith String
-     * @return &lt; N extends TreeNode &gt;
+     * 
+     * @param endsWith
+     * @return
      */
     List<N> findByNodeNameEndsWith(String endsWith);
 
     /**
-     * Create a tree node with {@code entity}
-     * @param entity &lt; N extends TreeNode &gt;
-     * @return &lt; N extends TreeNode &gt;
+     * {@code entity} ルート要素とした TreePath を作成する
+     * @param entity N extends TreeNode
+     * @return N extends TreeNode
      */
     N createRoot(N entity);
 
     /**
-     * Add {@code child} node as a child element of {@code parent} node
+     * {@code parent} ノードの子要素として {@code child} ノードを追加する
      * 
-     * @param parent &lt; N extends TreeNode &gt;
-     * @param child &lt; N extends TreeNode &gt;
-     * @return &lt; N extends TreeNode &gt;
+     * @param parent N extends TreeNode
+     * @param child N extends TreeNode
+     * @return N extends TreeNode
      * 
      */
     N addChild(N parent, N child);
 
     /**
-     * Add {@code child} node as a child element of {@code parent} node
-     * @param parent &lt; N extends TreeNode &gt;
-     * @param child &lt; N extends TreeNode &gt;
-     * @param orderIndex int
-     * @return &lt; N extends TreeNode &gt;
+     * 
+     * @param parent
+     * @param child
+     * @param orderIndex
+     * @return
      */
     N addChild(N parent, N child, int orderIndex);
 
     /**
-     * Returns the number of child nodes directly under the specified {@code parent}.
-     * @param parent &lt; N extends TreeNode &gt;
-     * @return number of child
+     * 指定されたノードの直下の子ノードの数を返します。
+     * @param parent
+     * @return
      */
     long getChildrenCount(N parent);
 
     /**
-     * Returns a collection of child nodes immediately below the specified node, sorted by {@code orderIndex}.
-     * @param parent &lt; N extends TreeNode &gt;
-     * @return List<N>
+     * 指定されたノードの直下の子ノードを、{@code orderIndex} の順で並べ替えたコレクションを返します
+     * @param parent
+     * @return
      */
     List<N> getChildren(N parent);
 
     /**
-     * Returns the depth on the path of the specified {@code node}.
+     * 指定されたノードと直下の子ノードを、{@code orderIndex} の順で並べ替えたコレクションを返します
+     * @param parent
+     * @return
+     */
+    List<N> getChildrenWithParent(N parent);
+
+    /**
+     * 指定されたノードのパス上の深さを返します
      * <p>
-     * Depth is calculated by setting the depth of the root node as 1.
-     * @param node &lt; N extends TreeNode &gt;
-     * @return int depth
+     * 深さは、ルートノードの深さを 1 として算出します。
+     * @param node
+     * @return
      */
     int getLevel(N node);
 
     /**
-     * Returns a collection of tree nodes under {@code parent}.
-     * @param parent &lt; N extends TreeNode &gt;
-     * @return List<N>
+     * 
+     * @param parent
+     * @return
      */
     List<N> getTree(N parent);
 
     /**
-     * Returns a collection of paths up to {@code node}.
-     * @param node &lt; N extends TreeNode &gt;
-     * @return List<N>
+     * 
+     * @param node
+     * @return
      */
     List<N> getPath(N node);
 
     /**
-     * Returns a tree of child nodes containing {@code parent}.
-     * @param parent &lt; N extends TreeNode &gt;
-     * @return List<N>
+     * {@code parent}を含む子ノードのツリーを返す
+     * @param parent N extends TreeNode
+     * @return Collection of P extends TreePath
      */
     List<P> getTreePaths(N parent);
 
     /**
-     * Return a collection of paths from the root path to {@code parent}.
-     * @param node &lt; N extends TreeNode &gt;
-     * @return List<N>
+     * ルートパスから {@code parent} までのパスをコレクションで返す
+     * @param node N extends TreeNode
+     * @return Collection of P extends TreePath
      */
     List<P> getDescendantPaths(N node);
 
     /**
-     * Returns the parent node of the specified {@code node}.
-     * <p>
-     * Returns null if the specified node has no parent (it is the root path).
-     * @param node &lt; N extends TreeNode &gt;
-     * @return &lt; N extends TreeNode &gt;
+     * 指定されたノードの親のノードを返します
+     * <p>指定されたノードが親が存在しない（ルートパスである）場合は null を返します。
+     * @param node
+     * @return
      */
     N getParent(N node);
 
     /**
-     * Returns a collection of sibling nodes of the specified {@code node}.
-     * @param node &lt; N extends TreeNode &gt;
-     * @return List<N>
+     * 指定されたノードの兄弟ノードをコレクションで返します
+     * @param node
+     * @return
      */
     List<N> getSiblings(N node);
 
     /**
-     * Get root nodes as a collection
-     * @return List<N>
+     * ルートノードを取得します
+     * @return
      */
     List<N> getRootNodes();
 
     /**
-     * Move the tree of child nodes containing {@code parent} directly under {@code moveTo
-     * <p>
-     * If destination is specified as {@code null}, move to root. 
-     * If there are no child nodes, the {@code parent} node is moved to the specified destination.
-     * @param parent &lt; N extends TreeNode &gt; source
-     * @param moveTo &lt; N extends TreeNode &gt; destination
+     * {@code parent} を含む子ノードのツリーを {@code moveTo} の直下に移動する
+     * <p>移動先を{@code null} に指定した場合、ルートに移動します。子ノードが存在しない場合は、
+     * {@code parent} ノードを指定先に移動します。
+     * @param parent N extends TreeNode 移動元
+     * @param moveTo N extends TreeNode 移動先
      */
     void moveTo(N parent, N moveTo);
 
@@ -248,18 +254,17 @@ public interface TreeDao<N extends TreeNode, P extends TreePath<N>> {
     void deletePath(N descendant);
 
     /**
-     * Search for TreePath matching {@code P}.
-     * <p>
-     * If no matching record exists, return {@code null}.
+     * {@code P} に一致する TreePath を検索する
+     * <p>一致するレコードが存在しない場合は、{@code null} を返す。
      * @param treePath P extends TreePath
      * @return P extends TreePath
      */
     P findTreePath(P treePath);
 
     /**
-     * Search for TreePath matching {@code ancestor} {@code descendang}.
-     * @param ancestor P extends TreePath ancestor
-     * @param descendant P extends TreePath descendant
+     * {@code ancestor} {@code descendang} に一致する TreePath を検索する
+     * @param ancestor P extends TreePath 祖先
+     * @param descendant P extends TreePath 仕損
      * @return P extends TreePath
      */
     P findTreePath(N ancestor, N descendant);

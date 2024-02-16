@@ -26,24 +26,21 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * @author zaturendo
- */
 public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreePath<N>> extends AbstractTreeDao<N, P> {
 
     private static final Logger log = LoggerFactory.getLogger(ClosureTableTreeDao.class);
-    /** sub class of {@code ClosureTableTreeNode} */
+    /** {@code ClosureTableTreeNode} のサブクラス */
     protected final Class<N> treeNodeEntityClass;
-    /** sub class of {@code TreePath} */
+    /** {@code TreePath} のサブクラス */
     protected final Class<P> treePathEntityClass;
     /** */
     private boolean removeReferencedNodes = false;
 
     /**
-     * Constructor
-     * <p>
-     * @param treeNodeEntityClass the persistence class representing the tree, implementing ClosureTableTreeNode. Its simpleName will be used as table name for queries.
-     * @param treePathEntityClass the persistence class representing ancestor-child relations, implementing TreePaths. Its simpleName will be used as table name for queries.
+     * コンストラクタ
+     * 
+     * @param treeNodeEntityClass {@code ClosureTableTreeNode} のサブクラス
+     * @param treePathEntityClass {@code TreePath} のサブクラス
      * @param dbSession           {@code DbSession} の実装クラス
      */
     public ClosureTableTreeDao(
@@ -343,6 +340,17 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
 
     /** {@inheritDoc} */
     @Override
+    @SuppressWarnings("unchecked")
+    public List<N> getChildrenWithParent(N parent) {
+
+        String sqlString = "select p.descendant from "
+                + pathEntityName() + " p where p.ancestor = ?1 and p.depth = 1 or p.depth = 0 "
+                + "order by p.depth, p.orderIndex";
+        return (List<N>) session.queryList(sqlString, Arrays.asList(parent).toArray());
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public int getLevel(N node) {
 
         if (!isPersistent(node) || !isPathExists(node)) {
@@ -585,22 +593,6 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     }
 
     /**
-     * ノード情報のコレクションを返す
-     * <p>
-     * TreeNode はデータのみで、ツリーに関する情報は持っていません。各 TreeNode の関連性をいち早く知るには、
-     * 関連性を保持する TreePath と組み合わせて、ツリー状にするのが最適です。
-     * <p>
-     * このメソッドは、TreeNode を基準に、TreePath のツリー情報を保持した {@code ClosureTableTreeNodeIno} の
-     * コレクションを返します。
-     * <p>
-     * この{@code ClosureTableTreeNodeIno} は、次のような構造になっています。
-     * <ul>
-     * <li>ClosureTableTreeNode</li>
-     * <li>treePaths（ルートノードからのパスを文字列で表現したもの）</li>
-     * <li>pathSeq（ルートノードからパスを、ノードIDをカンマ区切りで表現したもの）</li>
-     * <li>depth（ルートからの深さ）</lid>
-     * <li>orderIndex（並び順）</lid>
-     * </ul>
      * 
      * @return
      */
@@ -617,14 +609,9 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     }
 
     /**
-     * 複数のノードのツリーを取得し、そのツリーの一覧からノードインフォを返す
-     * <p>
-     * 基本的な機能は {@code getClosureTableTreeNodeInfo()} と同じですが、ツリーを作成するレベルを変更できるようにします。
-     * <p>
-     * 引数で渡したコレクションの各ノードをルートとする一覧を作成し返します。
-     * <p>
-     * これは、メニューリストのようなツリー構造のものを、ユーザーのロールによって返したいリストを変更したいような時に最適です。
-     * @param havingNodes List<N>
+     * 複数のノードのそれぞれを親とした場合の子ノードツリーを取得する
+     * 
+     * @param havingNodes
      * @return
      */
     public List<ClosureTableTreeNodeInfo> getClosureTableTreeNodeInfo(List<N> havingNodes) {
