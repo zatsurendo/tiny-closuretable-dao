@@ -275,4 +275,25 @@ public interface TreeDao<N extends TreeNode, P extends TreePath<N>> {
      * @return
      */
     long countPaths(N node);
+
+    /**
+     * TreeNodeのすべてのノードをNestedTreeNodeで返す
+     * @return
+     */
+    List<NestedTreeNode<N>> getNestedTreeNodeList();
+
+    /**
+     * {@code nodes} の子ノード全てを NestedTreeNode で返す
+     * @param nodes
+     * @return
+     */
+    List<NestedTreeNode<N>> getNestedTreeNodeList(List<N> nodes);
+
+    /**
+     * {@code node} を親とする子ノード全てを NestedNodeList で返す
+     * @param node
+     * @return
+     */
+    NestedTreeNode<N> getNestedTreeNodeList(N node);
+
 }

@@ -4,6 +4,7 @@ import com.roughandcheap.tinyclosuretabledao.commons.DbSession;
 import com.roughandcheap.tinyclosuretabledao.jpatree.AbstractTreeDao;
 import com.roughandcheap.tinyclosuretabledao.jpatree.ClosureTableTreeNodeInfo;
 import com.roughandcheap.tinyclosuretabledao.jpatree.JpaTreeException;
+import com.roughandcheap.tinyclosuretabledao.jpatree.NestedTreeNode;
 
 import jakarta.persistence.Query;
 
@@ -25,6 +26,7 @@ import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.CollectionUtils;
 
 public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreePath<N>> extends AbstractTreeDao<N, P> {
 
@@ -736,6 +738,43 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
 
     private int getByLength(String string, Charset charset) {
         return string.getBytes(charset).length;
+    }
+
+    @Override
+    public List<NestedTreeNode<N>> getNestedTreeNodeList() {
+        List<N> rootNodes = getRootNodes();
+        if (CollectionUtils.isEmpty(rootNodes)) {
+            return null;
+        }
+        return getNestedTreeNodeList(rootNodes);
+    }
+
+    @Override
+    public List<NestedTreeNode<N>> getNestedTreeNodeList(List<N> nodes) {
+        List<NestedTreeNode<N>> nestedNodes = nodes.stream().map(node -> new NestedTreeNode<>(node)).collect(Collectors.toList());
+        for (NestedTreeNode<N> nestedNode : nestedNodes) {
+            getNest(nestedNode);
+        }
+        return nestedNodes;
+    }
+
+    @Override
+    public NestedTreeNode<N> getNestedTreeNodeList(N node) {
+        NestedTreeNode<N> nested = new NestedTreeNode<>(node);
+        getNest(nested);
+        return nested;
+    }
+
+    private void getNest(NestedTreeNode<N> nestedNode) {
+        N node = nestedNode.getNode();
+        List<N> nodeChildren = getChildren(node);
+        if (!CollectionUtils.isEmpty(nodeChildren)) {
+            for (N n : nodeChildren) {
+                NestedTreeNode<N> nn = new NestedTreeNode<>(n);
+                getNest(nn);
+                nestedNode.getChildren().add(nn);
+            }
+        }
     }
 
 }
