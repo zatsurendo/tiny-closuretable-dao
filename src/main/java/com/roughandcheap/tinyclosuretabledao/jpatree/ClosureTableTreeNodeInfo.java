@@ -7,11 +7,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
-/**
- * 
- * @author zatsurendo
- * @since 2024-01-07
- */
 @Setter
 @Getter
 @NoArgsConstructor

@@ -6,6 +6,7 @@ import com.roughandcheap.tinyclosuretabledao.jpatree.ClosureTableTreeNodeInfo;
 import com.roughandcheap.tinyclosuretabledao.jpatree.JpaTreeException;
 import com.roughandcheap.tinyclosuretabledao.jpatree.NestedTreeNode;
 
+import jakarta.annotation.Nullable;
 import jakarta.persistence.Query;
 
 import java.io.Serializable;
@@ -26,6 +27,7 @@ import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 
 public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreePath<N>> extends AbstractTreeDao<N, P> {
@@ -171,6 +173,13 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
         }
         throw new JpaTreeException("Specified entity is not exist");
     }
+    
+    @Override
+    public P save(P path) {
+        Object o = session.save(path);
+        flush();
+        return treePathEntityClass.cast(o);
+    }
 
     /** {@inheritDoc} */
     @Override
@@ -262,7 +271,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
         if (parent != null) {
             if (isPersistent(parent) && isPathExists(parent)) {
                 parentPaths = getDescendantPaths(parent);
-                clonePaths(child, parentPaths);
+                clonePaths(child, parentPaths, orderIndex);
             } else {
                 throw new JpaTreeException("parent should be persist");
             }
@@ -274,18 +283,19 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
 
     /**
      * {@code parentPaths}の各要素のdescendantを{@code child}にした上でDBを更新する
-     * 
-     * @param child       ClosureTableTreeNode
-     * @param parentPaths TreePath のコレクション
+     * @param child
+     * @param parentPaths
+     * @param orderIndex
      */
-    private void clonePaths(N child, List<P> parentPaths) {
+    private void clonePaths(N child, List<P> parentPaths, int orderIndex) {
 
         for (P path : parentPaths) {
             P treePath = newTreePathInstance();
             treePath.setAncestor(path.getAncestor());
             treePath.setDescendant(child);
             treePath.setDepth(path.getDepth() + 1);
-            treePath = treePathEntityClass.cast(session.save(treePath));
+            treePath.setOrderIndex(orderIndex);
+            treePathEntityClass.cast(session.save(treePath));
         }
     }
 
@@ -445,21 +455,22 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
     @Override
     public List<N> getRootNodes() {
 
-        String queryString = "select p.descendant, count(p.ancestor) from " + pathEntityName() + " p "
-                + "group by p.descendant having count(p.ancestor) = 1";
+        String queryString = "select p.ancestor from " + pathEntityName() + " p where p.depth = 0 "
+                + "and not exists (select 'x' from " + pathEntityName() + " p2 "
+                + "where p2.descendant = p.descendant and p2.depth > 0)";
+        List<Object> parameters = new ArrayList<>();
         @SuppressWarnings("unchecked")
-        List<Object[]> resultList = (List<Object[]>) session.queryList(queryString, null);
+        List<ClosureTableTreeNode> resultList = (List<ClosureTableTreeNode>) session.queryList(queryString, parameters.toArray());
         List<N> result = new ArrayList<>();
         resultList.forEach(p -> {
-            result.add(treeNodeEntityClass.cast(p[0]));
+            result.add(treeNodeEntityClass.cast(p));
         });
         return result;
     }
 
-    /** {@inheritDoc} */
     @Override
-    public void moveTo(N parent, N moveTo) {
-
+    public void moveTo(N parent, N moveTo, int orderIndex) {
+        
         if (parent == null || !isPersistent(parent) || !isPathExists(parent)) {
             // 移動元ノードがNullあるいは永続化されていない場合例外をスロー
             throw new JpaTreeException("parent should be persist.");
@@ -477,7 +488,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
             throw new JpaTreeException("parent is already root node.");
         }
 
-        // 移動元の子ノード（移動元ノード含む）コレクション
+        // 移動元の子ノードツリーの（移動元ノード含む）コレクション
         List<N> targetNodes = getTree(parent);
 
         // 移動元の子ノードツリーに moveTo が含まれている場合は例外をスロー
@@ -498,9 +509,9 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
 
         // 新パスマップ
         Map<N, List<P>> newPathsMap = new HashMap<>();
-        // 移動先のパスを生成
+        // 移動元の子ノード（移動元ノード含む）コレクションをループさせ、移動先のパスを生成
         for (N key : targetNodes) {
-            // 各移動元子ノードのパス（parentPath）から、移動元パスを除いた部分を tail に保存
+            // 各移動元子ノードのパスから、移動元ノードパス（移動元ノード含まない）を除いた部分を tail に保存
             List<N> tail = getPath(key).stream().filter(n -> {
                 if (parentPath.stream().anyMatch(m -> m.equals(n))) {
                     return false;
@@ -508,12 +519,15 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
                 return true;
             }).collect(Collectors.toList());
 
+
             // 移動先ノードパスとtailを一つにしたコレクション
             List<N> newOrder = Stream.concat(moveToPath.stream(), tail.stream()).collect(Collectors.toList());
             // 新しいパスを保持するコレクション
             List<P> newPaths = new ArrayList<>();
             // newOrder のサイズ（depth計算用）
             int count = newOrder.size();
+            // orderIndex を算出
+            int orderIdx = (key.equals(parent) ? orderIndex : findTreePath(key, key).getOrderIndex());
             // パス生成ループ
             for (N node : newOrder) {
                 // 新しいインスタンスを取得
@@ -521,8 +535,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
                 path.setAncestor(node);
                 path.setDescendant(key);
                 path.setDepth(--count);
-                // key と node が同一（自己参照）の場合、オーダーインデックスを取得しセット
-                path.setOrderIndex(node.equals(key) ? findTreePath(node, node).getOrderIndex() : 0);
+                path.setOrderIndex(orderIdx);
                 newPaths.add(path);
             }
             newPathsMap.put(key, newPaths);
@@ -541,16 +554,97 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
         session.flush();
     }
 
+    /**
+     * 
+     * @param sourceId
+     * @param parentId
+     * @throws JpaTreeException 移動時に例外が発生した場合
+     */
+    @Override
+    public void procParent(Serializable sourceId, @Nullable Serializable parentId, int orderIndex) {
+
+        Assert.notNull(sourceId, "Source node id must not be null.");
+
+        N node = find(sourceId);
+
+        Assert.notNull(node, "Specified id is not registered. regist it first.");
+
+        N newParent = (parentId == null || parentId.equals(0L)) ? null : find(parentId); // 新しい親ノード
+
+        if (isPathExists(node)) {
+            // node のパスが存在する
+            N currentParent = getParent(node); // 現在のパスでの 親ノード
+
+            if (currentParent != null) {
+
+                // 親ノードが存在する ＝ ROOTノードではない場合
+                if (newParent != null) {
+                    // 新しい親が Null ではない場合
+                    if (!currentParent.equals(newParent)) {
+                        // 現在の親と新しい親が違う場合 moveTo
+                        log.debug("move {} to {}", node.getNodeName(), newParent.getNodeName());
+                        moveTo(node, newParent, orderIndex);
+                    } else {
+                        // 現在の親と新しい親が同じ場合 orderIndex のみ更新
+                        log.debug("update orderindex of {} with {}", node.getNodeName(), orderIndex);
+                        Stream.of(findTreePath(node, node), findTreePath(currentParent, node)).forEach(p -> {
+                            p.setOrderIndex(orderIndex);
+                            save(p);
+                            log.debug("Path saved {}", p.toString());
+                        });
+                    }
+                } else {
+                    // ROOTノードではなく新しい親が Null な場合 ＝ ルートに移動
+                    log.debug("move {} to root.", node.getNodeName());
+                    moveTo(node, null, orderIndex);
+                }
+
+            } else {
+
+                // Root ノードの場合
+                if (newParent != null) {
+                    // newParent != null moveTo
+                    log.debug("move {} to root.", node.getNodeName());
+                    moveTo(node, newParent, orderIndex);
+                } else {
+                    // OrderIndex のみ
+                    log.debug("update orderindex of {} with {}", node.getNodeName(), orderIndex);
+                    Stream.of(findTreePath(node, node)).forEach(p -> {
+                        p.setOrderIndex(orderIndex);
+                        save(p);
+                        log.debug("Path saved {}", p.toString());
+                    });
+                }
+
+            }
+        } else {
+            // パスが存在しない場合、親に子ノードとして追加。親が Null の場合はルートノードに
+            log.debug("addChild: {} to {}", node.getNodeName(), newParent == null ? "null" : newParent.getNodeName());
+            addChild(newParent, node, orderIndex);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void moveTo(N parent, N moveTo) {
+        moveTo(parent, moveTo, 0);
+    }
+
     /** {@inheritDoc} */
     @Override
     public void deletePath(N descendant) {
 
+        deletePath(descendant, false);
+    }
+
+    @Override
+    public void deletePath(N descendant, boolean force) {
         if (hasChild(descendant)) {
             throw new JpaTreeException("specified node has child(ren)");
         }
         List<P> paths = getDescendantPaths(descendant);
         paths.forEach(p -> session.delete(p));
-        removeNode(descendant);
+        removeNode(descendant, force);
     }
 
     /** {@inheritDoc} */
@@ -776,5 +870,4 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
             }
         }
     }
-
 }

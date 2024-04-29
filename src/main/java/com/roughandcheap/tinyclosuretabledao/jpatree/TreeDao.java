@@ -5,6 +5,8 @@ import java.util.List;
 
 import com.roughandcheap.tinyclosuretabledao.jpatree.closuretable.TreePath;
 
+import jakarta.annotation.Nullable;
+
 /**
  * Tree DAO provides hierarchical access to records in a JPA database layer.
  * There can be more than one tree in a database table.
@@ -91,6 +93,14 @@ public interface TreeDao<N extends TreeNode, P extends TreePath<N>> {
      */
     N update(N entity);
 
+    
+    /**
+     * パスを保存
+     * @param path
+     * @return
+     */
+    P save(P path);
+    
     /**
      * {@code entity} を挿入、あるいは更新する
      * @param entity N extends TreeNode
@@ -242,16 +252,52 @@ public interface TreeDao<N extends TreeNode, P extends TreePath<N>> {
      * {@code parent} を含む子ノードのツリーを {@code moveTo} の直下に移動する
      * <p>移動先を{@code null} に指定した場合、ルートに移動します。子ノードが存在しない場合は、
      * {@code parent} ノードを指定先に移動します。
+     * 
+     * @param parent N extends TreeNode 移動元
+     * @param moveTo N extends TreeNode 移動先
+     * @param orderIndex TreePath(parent, parent) 時の純
+     */
+    void moveTo(N parent, N moveTo, int orderIndex);
+
+    /**
+     * {@code parent} を含む子ノードのツリーを {@code moveTo} の直下に移動する
+     * <p>移動先を{@code null} に指定した場合、ルートに移動します。子ノードが存在しない場合は、
+     * {@code parent} ノードを指定先に移動します。
      * @param parent N extends TreeNode 移動元
      * @param moveTo N extends TreeNode 移動先
      */
     void moveTo(N parent, N moveTo);
 
     /**
+     * {@code sourceId} で与えられたノードを {@code parentId} ノードの直下に移動する
+     * <p>
+     * souceId のノードがパスに存在する場合は、実際の親ノードと与えられた parentId のノードが
+     * 同一の場合は、単純に ソースノードの orderIndex を更新するのみで終わる。
+     * <p>
+     * 異なる場合は、ソースノードとその下に続くツリーを移動先のノードの下に移動する。
+     * <p>
+     * ソースノードのパスが存在していない場合は、ソースノードを親ノードの直下に addChild する。
+     * <p>
+     * いずれの場合でも、ソースノードのパスの orderIndex は更新される。
+     * @param sourceId
+     * @param parentId
+     * @param orderIndex
+     * @throws  JpaTreeException    移動時に例外が発生した場合
+     */
+    void procParent(Serializable sourceId, @Nullable Serializable parentId, int orderIndex);
+
+    /**
      * {@code TreePath.descendant} が {@code descendant} であるパスを削除する
      * @param descendant N extends TreeNode
      */
     void deletePath(N descendant);
+
+    /**
+     * {@code TreePath.descendant} が {@code descendant} であるパスを削除する
+     * @param descendant N extends TreeNode
+     * @param force true:強制削除、false:強制削除しない
+     */
+    void deletePath(N descendant, boolean force);
 
     /**
      * {@code P} に一致する TreePath を検索する
