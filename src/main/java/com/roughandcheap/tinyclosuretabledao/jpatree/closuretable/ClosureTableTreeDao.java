@@ -739,7 +739,7 @@ public class ClosureTableTreeDao<N extends ClosureTableTreeNode, P extends TreeP
      * @param query
      * @return
      */
-    private List<ClosureTableTreeNodeInfo> getTransFomrmed(Query query) {
+    protected List<ClosureTableTreeNodeInfo> getTransFomrmed(Query query) {
 
         @SuppressWarnings("unchecked")
         List<ClosureTableTreeNodeInfo> pathDepths = query.unwrap(org.hibernate.query.Query.class)
